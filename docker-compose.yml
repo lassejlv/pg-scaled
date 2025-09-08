@@ -1,28 +1,25 @@
-version: '3.8'
-
 services:
   # Primary PostgreSQL Database (Master)
   postgres-primary:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: postgres-primary
+    env_file:
+      - env.prod
     environment:
-      POSTGRES_DB: scaleddb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres123
-      POSTGRES_REPLICATION_USER: replicator
-      POSTGRES_REPLICATION_PASSWORD: repl123
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
     volumes:
       - postgres_primary_data:/var/lib/postgresql/data
       - ./config/primary.conf:/etc/postgresql/postgresql.conf
       - ./scripts/init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh
     ports:
-      - '5432:5432'
+      - '${PRIMARY_PORT}:5432'
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
     deploy:
       resources:
         limits:
-          memory: 1.5G
-          cpus: '1.0'
+          memory: ${PRIMARY_MEMORY_LIMIT}
+          cpus: '${PRIMARY_CPU_LIMIT}'
         reservations:
           memory: 1G
           cpus: '0.5'
@@ -36,23 +33,22 @@ services:
 
   # First PostgreSQL Replica
   postgres-replica-1:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: postgres-replica-1
+    env_file:
+      - env.prod
     environment:
-      POSTGRES_DB: scaleddb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres123
-      PGUSER: postgres
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      PGUSER: ${POSTGRES_ADMIN_USER}
       POSTGRES_PRIMARY_HOST: postgres-primary
       POSTGRES_PRIMARY_PORT: 5432
-      POSTGRES_REPLICATION_USER: replicator
-      POSTGRES_REPLICATION_PASSWORD: repl123
     volumes:
       - postgres_replica1_data:/var/lib/postgresql/data
       - ./config/replica.conf:/etc/postgresql/postgresql.conf
       - ./scripts/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
     ports:
-      - '5433:5432'
+      - '${REPLICA1_PORT}:5432'
     depends_on:
       postgres-primary:
         condition: service_healthy
@@ -60,8 +56,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '0.8'
+          memory: ${REPLICA_MEMORY_LIMIT}
+          cpus: '${REPLICA_CPU_LIMIT}'
         reservations:
           memory: 512M
           cpus: '0.3'
@@ -75,23 +71,22 @@ services:
 
   # Second PostgreSQL Replica
   postgres-replica-2:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: postgres-replica-2
+    env_file:
+      - env.prod
     environment:
-      POSTGRES_DB: scaleddb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres123
-      PGUSER: postgres
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      PGUSER: ${POSTGRES_ADMIN_USER}
       POSTGRES_PRIMARY_HOST: postgres-primary
       POSTGRES_PRIMARY_PORT: 5432
-      POSTGRES_REPLICATION_USER: replicator
-      POSTGRES_REPLICATION_PASSWORD: repl123
     volumes:
       - postgres_replica2_data:/var/lib/postgresql/data
       - ./config/replica.conf:/etc/postgresql/postgresql.conf
       - ./scripts/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
     ports:
-      - '5434:5432'
+      - '${REPLICA2_PORT}:5432'
     depends_on:
       postgres-primary:
         condition: service_healthy
@@ -99,8 +94,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '0.8'
+          memory: ${REPLICA_MEMORY_LIMIT}
+          cpus: '${REPLICA_CPU_LIMIT}'
         reservations:
           memory: 512M
           cpus: '0.3'
@@ -116,28 +111,30 @@ services:
   pgbouncer:
     image: pgbouncer/pgbouncer:latest
     container_name: pgbouncer
+    env_file:
+      - env.prod
     environment:
       DATABASES_HOST: postgres-primary
       DATABASES_PORT: 5432
-      DATABASES_USER: postgres
-      DATABASES_PASSWORD: postgres123
-      DATABASES_DBNAME: scaleddb
-      POOL_MODE: transaction
-      MAX_CLIENT_CONN: 100
-      DEFAULT_POOL_SIZE: 25
+      DATABASES_USER: ${POSTGRES_ADMIN_USER}
+      DATABASES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      DATABASES_DBNAME: ${POSTGRES_DB}
+      POOL_MODE: ${PGBOUNCER_POOL_MODE}
+      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN}
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE}
     volumes:
       - ./config/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini
       - ./config/userlist.txt:/etc/pgbouncer/userlist.txt
     ports:
-      - '6432:5432'
+      - '${PGBOUNCER_PORT}:5432'
     depends_on:
       postgres-primary:
         condition: service_healthy
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: '0.4'
+          memory: ${PGBOUNCER_MEMORY_LIMIT}
+          cpus: '${PGBOUNCER_CPU_LIMIT}'
         reservations:
           memory: 128M
           cpus: '0.1'
@@ -148,12 +145,14 @@ services:
   haproxy:
     image: haproxy:alpine
     container_name: haproxy-postgres
+    env_file:
+      - env.prod
     volumes:
       - ./config/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
     ports:
-      - '5000:5000' # Read-only load balanced endpoint
-      - '5001:5001' # Write endpoint (primary only)
-      - '8080:8080' # HAProxy stats
+      - '${HAPROXY_READ_PORT}:5000' # Read-only load balanced endpoint
+      - '${HAPROXY_WRITE_PORT}:5001' # Write endpoint (primary only)
+      - '${HAPROXY_STATS_PORT}:8080' # HAProxy stats
     depends_on:
       - postgres-primary
       - postgres-replica-1
@@ -161,8 +160,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: '0.2'
+          memory: ${HAPROXY_MEMORY_LIMIT}
+          cpus: '${HAPROXY_CPU_LIMIT}'
         reservations:
           memory: 128M
           cpus: '0.1'

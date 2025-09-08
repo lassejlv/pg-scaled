@@ -10,14 +10,14 @@ done
 # Create replication user
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     -- Create replication user
-    CREATE USER replicator REPLICATION LOGIN CONNECTION LIMIT 10 ENCRYPTED PASSWORD 'repl123';
+    CREATE USER ${POSTGRES_REPLICATION_USER} REPLICATION LOGIN CONNECTION LIMIT 10 ENCRYPTED PASSWORD '${POSTGRES_REPLICATION_PASSWORD}';
     
     -- Create replication slots for replicas
     SELECT pg_create_physical_replication_slot('replica_slot_1');
     SELECT pg_create_physical_replication_slot('replica_slot_2');
     
     -- Grant necessary permissions
-    GRANT CONNECT ON DATABASE scaleddb TO replicator;
+    GRANT CONNECT ON DATABASE ${POSTGRES_DB} TO ${POSTGRES_REPLICATION_USER};
     
     -- Create a sample table for testing
     CREATE TABLE IF NOT EXISTS test_data (
@@ -37,8 +37,8 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 EOSQL
 
 # Update pg_hba.conf to allow replication connections
-echo "host replication replicator 0.0.0.0/0 md5" >> /var/lib/postgresql/data/pg_hba.conf
-echo "host all postgres 0.0.0.0/0 md5" >> /var/lib/postgresql/data/pg_hba.conf
+echo "host replication ${POSTGRES_REPLICATION_USER} 0.0.0.0/0 md5" >> /var/lib/postgresql/data/pg_hba.conf
+echo "host all ${POSTGRES_USER} 0.0.0.0/0 md5" >> /var/lib/postgresql/data/pg_hba.conf
 
 # Reload configuration
 pg_ctl reload -D /var/lib/postgresql/data

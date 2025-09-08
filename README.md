@@ -20,14 +20,21 @@ A production-ready PostgreSQL setup with 1 primary and 2 replica instances, opti
 ## Quick Start
 
 ```bash
-# Start all services
+# Start cluster with auto-generated credentials
+./manage.sh start
+
+# This will:
+# - Generate secure random username/password
+# - Start all PostgreSQL 17 services with environment variables
+# - Create the database user with proper permissions
+# - Display connection strings with your public IP
+# - Save credentials to env.local
+
+# View credentials anytime
+./manage.sh credentials
+
+# Manual start (loads from env.prod)
 docker compose up -d
-
-# Check status
-docker compose ps
-
-# View logs
-docker compose logs -f postgres-primary
 ```
 
 ## Connection Endpoints
@@ -135,22 +142,55 @@ docker compose up -d
 
 ## Configuration Files
 
+### Environment Files
+
+- `env.prod`: Production configuration (ports, resources, passwords)
+- `env.local`: Auto-generated user credentials (created by ./manage.sh start)
+- `env.local.example`: Example credentials file
+
+### Service Configurations
+
 - `config/primary.conf`: Primary PostgreSQL configuration
 - `config/replica.conf`: Replica PostgreSQL configuration
 - `config/pgbouncer.ini`: PgBouncer connection pooler settings
 - `config/haproxy.cfg`: HAProxy load balancer configuration
-- `scripts/init-primary.sh`: Primary initialization script
-- `scripts/init-replica.sh`: Replica initialization script
 
-## Default Credentials
+### Initialization Scripts
 
-- Database: `scaleddb`
-- Username: `postgres`
-- Password: `postgres123`
-- Replication User: `replicator`
-- Replication Password: `repl123`
+- `scripts/init-primary.sh`: Primary setup with environment variables
+- `scripts/init-replica.sh`: Replica setup with environment variables
 
-**⚠️ Change these credentials in production!**
+## Credentials & Environment Variables
+
+### Auto-Generated User (Recommended)
+
+When using `./manage.sh start`, secure credentials are automatically generated:
+
+- Random username (e.g., `user_a3f7b982`)
+- Random 16-character password
+- Full database permissions
+- Saved to `env.local` file
+- Includes connection details (host, ports)
+
+### Environment Configuration
+
+All settings are controlled via `env.prod`:
+
+- **Database**: `POSTGRES_DB=scaleddb`
+- **Admin User**: `POSTGRES_ADMIN_USER=postgres`
+- **Admin Password**: `POSTGRES_ADMIN_PASSWORD=postgres123`
+- **Replication User**: `POSTGRES_REPLICATION_USER=replicator`
+- **Replication Password**: `POSTGRES_REPLICATION_PASSWORD=repl123`
+- **Ports**: `PRIMARY_PORT=5432`, `REPLICA1_PORT=5433`, etc.
+- **Resource Limits**: Memory and CPU allocations
+
+### Production Security
+
+1. Change admin passwords in `env.prod`
+2. Use `env.local` credentials for applications
+3. Both files are in `.gitignore` for security
+
+**⚠️ Update env.prod credentials before production deployment!**
 
 ## Troubleshooting
 
